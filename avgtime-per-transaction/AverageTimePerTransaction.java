@@ -2,9 +2,12 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Scanner;
 
@@ -15,20 +18,26 @@ import java.util.Scanner;
 public class AverageTimePerTransaction {
 
 	/*
-	 * transactionList contains the transaction name and log time (till END
-	 * statement occurs)
+	 * transactionMap contains the transaction name and log time (till END statement
+	 * occurs)
 	 */
-	private static HashMap<String, LocalDateTime> transactionList = new HashMap<String, LocalDateTime>();
+	private static final Map<String, LocalDateTime> transactionMap = new HashMap<String, LocalDateTime>();
 
 	/*
 	 * duration field contains the calculated time of each transaction
 	 */
-	private static HashMap<String, Long> duration = new HashMap<String, Long>();
+	private static final Map<String, Long> duration = new HashMap<String, Long>();
 
-	private static final String STATE_START = "start";
-	private static final String STATE_END = "end";
+	enum State {
+		START, END
+	}
+
+	enum Time {
+		IN_MINUTES, IN_SECONDS, IN_MILLISECONDS
+	}
+
 	private static final String MSG_INPUT = "Please give the file path";
-	private static final String MSG_OUTPUT = "Average time per transaction (in Minutes): ";
+	private static final String MSG_OUTPUT = "Average time per transaction: ";
 
 	public static void main(String[] args) {
 		System.out.println(MSG_INPUT);
@@ -40,10 +49,10 @@ public class AverageTimePerTransaction {
 		try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
 			String line = "";
 			while ((line = reader.readLine()) != null) {
-				parseAndCalculate(line);
+				parseTransaction(line);
 			}
 
-			System.out.println(MSG_OUTPUT + getAverageTime());
+			System.out.println(MSG_OUTPUT + getAverageTime(Time.IN_MINUTES));
 		} catch (IOException ex) {
 			System.out.println(ex.getMessage());
 		}
@@ -51,34 +60,70 @@ public class AverageTimePerTransaction {
 		scanner.close();
 	}
 
-	private static void parseAndCalculate(String line) {
+	private static void parseTransaction(String line) {
 		Optional<Transaction> optional = Optional.ofNullable(TransactionParser.parse(line));
 		if (optional.isPresent()) {
 			Transaction transaction = optional.get();
-			if (transaction.getState().equalsIgnoreCase(STATE_END)) {
-				if (transactionList.containsKey(transaction.getName()))
-					calDuration(transaction);
-			} else if (transaction.getState().equalsIgnoreCase(STATE_START)) {
-				transactionList.putIfAbsent(transaction.getName(), transaction.getLoggedAt());
+			if (transaction.getState().equalsIgnoreCase(State.END.toString())
+					&& transactionMap.containsKey(transaction.getName())) {
+				calDuration(transaction);
+			} else if (transaction.getState().equalsIgnoreCase(State.START.toString())) {
+				transactionMap.putIfAbsent(transaction.getName(), transaction.getLoggedAt());
 			}
 		}
 	}
 
 	private static void calDuration(Transaction transaction) {
-		duration.put(transaction.getName(),
-				Duration.between(transactionList.get(transaction.getName()), transaction.getLoggedAt()).toMinutes());
-		transactionList.remove(transaction.getName());
+
+		Long minutes = Duration.between(transactionMap.get(transaction.getName()), transaction.getLoggedAt())
+				.toMinutes();
+		duration.put(transaction.getName(), minutes);
+
+		transactionMap.remove(transaction.getName());
 	}
 
-	private static long getAverageTime() {
+	private static long getAverageTime(Time format) {
+		switch (format) {
+		case IN_MINUTES:
+			return getAverageTimeInMinutes();
+		case IN_SECONDS:
+			return getAverageTimeInSeconds();
+		case IN_MILLISECONDS:
+			return getAverageTimeInMilliseconds();
+		default:
+			return 0;
+		}
+	}
+
+	private static long getAverageTimeInMinutes() {
 		long avgTime = 0;
 		if (duration.size() > 0) {
-			long total = duration.values().stream().reduce(0l, (sum, i) -> {
-				return sum + i;
-			});
-			avgTime = total / duration.size();
+			avgTime = getTotalTime() / duration.size();
 		}
 		return avgTime;
+	}
+
+	private static long getAverageTimeInSeconds() {
+		long avgTime = 0;
+		if (duration.size() > 0) {
+			avgTime = (getTotalTime() * 60) / duration.size();
+		}
+		return avgTime;
+	}
+
+	private static long getAverageTimeInMilliseconds() {
+		long avgTime = 0;
+		if (duration.size() > 0) {
+			avgTime = (getTotalTime() * 60 * 1000) / duration.size();
+		}
+		return avgTime;
+	}
+
+	/*
+	 * return total time in minutes
+	 */
+	private static long getTotalTime() {
+		return duration.values().stream().reduce(0l, (sum, i) -> (sum + i));
 	}
 }
 
@@ -88,28 +133,37 @@ public class AverageTimePerTransaction {
  * 
  */
 class TransactionParser {
-	public static final String DATE_TIME_FORMAT = "yyyy-MM-dd h:mm a";
+	public static DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+	public static DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a");
+
 	public static final String DELIMITER = ",";
 	public static final int NUMBER_OF_TOKENS = 4;
 
 	public static Transaction parse(String text) {
 		String[] tokens = text.split(DELIMITER);
-		if (tokens.length == NUMBER_OF_TOKENS) {
+		if (NUMBER_OF_TOKENS == tokens.length) {
 			try {
 				return new Transaction(tokens[0], formatDateTime(tokens[1], tokens[2]), tokens[3].trim());
 			} catch (Exception ex) {
-				return null;
+				System.out.println(ex.getMessage());
 			}
 		}
 		return null;
 	}
 
+	public static Transaction parse(String text, DateTimeFormatter dateFormat, DateTimeFormatter timeFormat) {
+		if (dateFormat != null)
+			DATE_FORMAT = dateFormat;
+		if (timeFormat != null)
+			TIME_FORMAT = timeFormat;
+		return parse(text);
+	}
+
 	private static LocalDateTime formatDateTime(String date, String time) {
 		// format the date and time
-		DateTimeFormatter format = DateTimeFormatter.ofPattern(DATE_TIME_FORMAT);
 		date = date.replaceAll("\\s", "");
 		time = time.trim().toUpperCase();
-		return LocalDateTime.parse(date + " " + time, format);
+		return LocalDateTime.of(LocalDate.parse(date, DATE_FORMAT), LocalTime.parse(time, TIME_FORMAT));
 	}
 }
 
@@ -139,3 +193,4 @@ class Transaction {
 		return state;
 	}
 }
+
