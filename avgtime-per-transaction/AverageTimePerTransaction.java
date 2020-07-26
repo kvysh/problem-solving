@@ -60,6 +60,9 @@ public class AverageTimePerTransaction {
 		scanner.close();
 	}
 
+	/*
+	 * This method parse the text given
+	 */
 	private static void parseTransaction(String line) {
 		Optional<Transaction> optional = Optional.ofNullable(TransactionParser.parse(line));
 		if (optional.isPresent()) {
@@ -73,6 +76,9 @@ public class AverageTimePerTransaction {
 		}
 	}
 
+	/*
+	 * Calculate duration from start and end logs
+	 */
 	private static void calDuration(Transaction transaction) {
 
 		Long minutes = Duration.between(transactionMap.get(transaction.getName()), transaction.getLoggedAt())
@@ -82,45 +88,31 @@ public class AverageTimePerTransaction {
 		transactionMap.remove(transaction.getName());
 	}
 
+	/*
+	 * Calculate the average time and result in given format (minutes, seconds or milliseconds)
+	 */
 	private static long getAverageTime(Time format) {
-		switch (format) {
-		case IN_MINUTES:
-			return getAverageTimeInMinutes();
-		case IN_SECONDS:
-			return getAverageTimeInSeconds();
-		case IN_MILLISECONDS:
-			return getAverageTimeInMilliseconds();
-		default:
-			return 0;
-		}
-	}
-
-	private static long getAverageTimeInMinutes() {
 		long avgTime = 0;
 		if (duration.size() > 0) {
-			avgTime = getTotalTime() / duration.size();
-		}
-		return avgTime;
-	}
-
-	private static long getAverageTimeInSeconds() {
-		long avgTime = 0;
-		if (duration.size() > 0) {
-			avgTime = (getTotalTime() * 60) / duration.size();
-		}
-		return avgTime;
-	}
-
-	private static long getAverageTimeInMilliseconds() {
-		long avgTime = 0;
-		if (duration.size() > 0) {
-			avgTime = (getTotalTime() * 60 * 1000) / duration.size();
+			switch (format) {
+			case IN_MINUTES:
+				avgTime = getTotalTime() / duration.size();
+				break;
+			case IN_SECONDS:
+				avgTime = (getTotalTime() * 60) / duration.size();
+				break;
+			case IN_MILLISECONDS:
+				avgTime = (getTotalTime() * 60 * 1000) / duration.size();
+				break;
+			default:
+				break;
+			}
 		}
 		return avgTime;
 	}
 
 	/*
-	 * return total time in minutes
+	 * Return total time in minutes
 	 */
 	private static long getTotalTime() {
 		return duration.values().stream().reduce(0l, (sum, i) -> (sum + i));
@@ -128,8 +120,9 @@ public class AverageTimePerTransaction {
 }
 
 /*
- * TransactionParser - parse the given text and finds out the name, loggedAt and
- * state
+ * TransactionParser - parse the given text and finds out the name, loggedAt and state
+ * 
+ * DATE_FORMAT & TIME_FORMAT can be given as an input as per the transaction log format to "parse" method
  * 
  */
 class TransactionParser {
@@ -139,6 +132,9 @@ class TransactionParser {
 	public static final String DELIMITER = ",";
 	public static final int NUMBER_OF_TOKENS = 4;
 
+	/*
+	 * Parse the give text into Transaction object
+	 */
 	public static Transaction parse(String text) {
 		String[] tokens = text.split(DELIMITER);
 		if (NUMBER_OF_TOKENS == tokens.length) {
@@ -151,6 +147,9 @@ class TransactionParser {
 		return null;
 	}
 
+	/*
+	 * Parse the give text into Transaction object with given Date & Time formats
+	 */
 	public static Transaction parse(String text, DateTimeFormatter dateFormat, DateTimeFormatter timeFormat) {
 		if (dateFormat != null)
 			DATE_FORMAT = dateFormat;
